@@ -11,6 +11,7 @@ Nơi khai báo tất cả các "món đồ nghề" mà ReAct Agent có thể g�
 
 import inspect
 import sys
+from functools import wraps
 
 # Đảm bảo in ra Tiếng Việt và Emojis không bị lỗi trên Windows Console
 if sys.stdout.encoding != 'utf-8':
@@ -109,9 +110,43 @@ def _find_order(order_id: str):
 
 
 # =============================================================================
+# 🛡️ SAFETY WRAPPER — hợp đồng chung cho mọi public tool
+# =============================================================================
+
+def safe_tool(func):
+    """
+    Bảo đảm một public tool luôn trả về ``str`` và không để exception thoát ra.
+
+    Các tool vẫn tự xử lý lỗi nghiệp vụ để trả thông báo cụ thể. Wrapper này là
+    lớp bảo vệ cuối cùng cho lỗi lập trình hoặc lỗi phụ thuộc ngoài dự kiến, đồng
+    thời phát hiện vi phạm output contract nếu tool vô tình trả về kiểu khác.
+    ``@wraps`` giữ nguyên tên, docstring và signature để dispatcher đọc đúng số
+    tham số của tool.
+    """
+    @wraps(func)
+    def wrapper(*args, **kwargs) -> str:
+        try:
+            result = func(*args, **kwargs)
+            if not isinstance(result, str):
+                return (
+                    f"LỖI: Tool '{func.__name__}' vi phạm output contract: "
+                    f"phải trả về str, nhận được {type(result).__name__}."
+                )
+            return result
+        except Exception as e:
+            return (
+                f"LỖI: Tool '{func.__name__}' gặp sự cố ngoài dự kiến "
+                f"({type(e).__name__}: {e})."
+            )
+
+    return wrapper
+
+
+# =============================================================================
 # 🛠️ TOOL 1 — get_order_status  (READ-ONLY)
 # =============================================================================
 
+@safe_tool
 def get_order_status(order_id: str) -> str:
     """
     Tra cứu trạng thái và thông tin chi tiết của một đơn hàng.
@@ -161,6 +196,7 @@ def get_order_status(order_id: str) -> str:
 # 🛠️ TOOL 2 — check_return_eligibility  (READ-ONLY)
 # =============================================================================
 
+@safe_tool
 def check_return_eligibility(order_id: str) -> str:
     """
     Kiểm tra một đơn hàng có đủ điều kiện đổi/trả hay không theo 5 luật nghiệp vụ.
@@ -255,6 +291,7 @@ def check_return_eligibility(order_id: str) -> str:
 # 🛠️ TOOL 3 — create_return_request  (⚠️ CÓ SIDE-EFFECT: GHI DỮ LIỆU)
 # =============================================================================
 
+@safe_tool
 def create_return_request(order_id: str, reason: str) -> str:
     """
     Tạo yêu cầu hoàn trả cho một đơn hàng và sinh mã RMA.
@@ -320,6 +357,7 @@ def create_return_request(order_id: str, reason: str) -> str:
 # 🛠️ TOOL 4 — get_return_policy  (READ-ONLY)
 # =============================================================================
 
+@safe_tool
 def get_return_policy(category: str) -> str:
     """
     Tra cứu chính sách đổi trả áp dụng cho một nhóm hàng.
@@ -466,29 +504,41 @@ if __name__ == "__main__":
     print("=" * 62)
 
     cases = [
-        ("✅ Tra đơn hợp lệ",              "get_order_status", "DH1001"),
-        ("🔴 Tra đơn không tồn tại",       "get_order_status", "DH9999"),
-        ("✅ R3 còn hạn — đủ điều kiện",   "check_return_eligibility", "DH1001"),
-        ("❌ R2 chưa giao",                "check_return_eligibility", "DH1002"),
-        ("❌ R3 quá hạn 7 ngày",           "check_return_eligibility", "DH1003"),
-        ("❌ R4 nhóm hàng cấm",            "check_return_eligibility", "DH1004"),
-        ("❌ R5 đã hoàn trả",              "check_return_eligibility", "DH1005"),
-        ("🔴 Kiểm tra đơn ma",             "check_return_eligibility", "DH9999"),
-        ("⚠️ Tạo yêu cầu hợp lệ",          "create_return_request", "DH1001, Áo bị lỗi đường chỉ"),
-        ("🛡️ Chặn tạo yêu cầu quá hạn",    "create_return_request", "DH1003, Không thích nữa"),
-        ("🛡️ Chặn tạo yêu cầu nhóm cấm",   "create_return_request", "DH1004, Mặc không vừa"),
-        ("❌ Thiếu lý do hoàn trả",        "create_return_request", "DH1002"),
-        ("✅ Tra chính sách hợp lệ",       "get_return_policy", "điện tử"),
-        ("✅ Tra chính sách viết không dấu", "get_return_policy", "thoi trang"),
-        ("🔴 Nhóm hàng không hợp lệ",      "get_return_policy", "xe cộ"),
-        ("🔴 Tool không tồn tại",          "search_product", "áo sơ mi"),
-        ("🔴 Gọi tool thiếu tham số",      "get_order_status", ""),
+        # label, tool, args, expected output prefix
+        ("✅ Tra đơn hợp lệ",                "get_order_status", "DH1001", "📦"),
+        ("🔴 Tra đơn không tồn tại",         "get_order_status", "DH9999", "LỖI:"),
+        ("✅ R3 còn hạn — đủ điều kiện",     "check_return_eligibility", "DH1001", "ĐỦ ĐIỀU KIỆN:"),
+        ("❌ R2 chưa giao",                  "check_return_eligibility", "DH1002", "TỪ CHỐI:"),
+        ("❌ R3 quá hạn 7 ngày",             "check_return_eligibility", "DH1003", "TỪ CHỐI:"),
+        ("❌ R4 nhóm hàng cấm",              "check_return_eligibility", "DH1004", "TỪ CHỐI:"),
+        ("❌ R5 đã hoàn trả",                "check_return_eligibility", "DH1005", "TỪ CHỐI:"),
+        ("🔴 Kiểm tra đơn ma",               "check_return_eligibility", "DH9999", "LỖI:"),
+        ("⚠️ Tạo yêu cầu hợp lệ",            "create_return_request", "DH1001, Áo bị lỗi đường chỉ", "THÀNH CÔNG:"),
+        ("🛡️ Chặn tạo yêu cầu quá hạn",      "create_return_request", "DH1003, Không thích nữa", "TỪ CHỐI:"),
+        ("🛡️ Chặn tạo yêu cầu nhóm cấm",     "create_return_request", "DH1004, Mặc không vừa", "TỪ CHỐI:"),
+        ("❌ Thiếu lý do hoàn trả",          "create_return_request", "DH1002", "LỖI:"),
+        ("✅ Tra chính sách hợp lệ",         "get_return_policy", "điện tử", "📜"),
+        ("✅ Tra chính sách viết không dấu", "get_return_policy", "thoi trang", "📜"),
+        ("🔴 Nhóm hàng không hợp lệ",        "get_return_policy", "xe cộ", "LỖI:"),
+        ("🔴 Tool không tồn tại",            "search_product", "áo sơ mi", "LỖI:"),
+        ("🔴 Gọi tool thiếu tham số",        "get_order_status", "", "LỖI:"),
     ]
 
-    for label, tool, args in cases:
+    passed = 0
+    for label, tool, args, expected_prefix in cases:
+        observation = run_tool(tool, args)
+        assert isinstance(observation, str), (
+            f"{tool} vi phạm contract: output phải là str, "
+            f"nhận được {type(observation).__name__}"
+        )
+        assert observation.startswith(expected_prefix), (
+            f"{tool}[{args}] phải bắt đầu bằng {expected_prefix!r}, "
+            f"nhận được {observation!r}"
+        )
+        passed += 1
         print(f"\n{label}")
         print(f"   Action     : {tool}[{args}]")
-        print(f"   Observation: {run_tool(tool, args)}")
+        print(f"   Observation: {observation}")
 
     print("\n" + "=" * 62)
     print("🛡️ KIỂM TRA CHỐNG HOÀN TRẢ 2 LẦN (gọi lại đơn DH1001 vừa tạo RMA)")
@@ -497,5 +547,6 @@ if __name__ == "__main__":
     print("\n" + "=" * 62)
     print(f"📒 SỔ YÊU CẦU HOÀN TRẢ ĐÃ TẠO (bằng chứng side-effect): {list(RETURN_REQUESTS.keys())}")
     print(f"✅ Đã đăng ký {len(AVAILABLE_TOOLS)} tool: {list(AVAILABLE_TOOLS.keys())}")
+    print(f"✅ SELF-TEST PASS: {passed}/{len(cases)} test cases đạt đúng output contract.")
     print("✅ Không có exception nào thoát ra ngoài — toàn bộ lỗi đều trả về dạng chuỗi.")
     print("=" * 62)
