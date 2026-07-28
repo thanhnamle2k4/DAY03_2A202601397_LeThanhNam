@@ -18,9 +18,9 @@
 
 ## 🔍 2. SO SÁNH PHẢN HỒI (TEST CASE DEMO)
 
-**Câu hỏi**: *"Kiểm tra thông tin đơn hàng với mã đơn SPX200"*
+**Câu hỏi**: *"Đơn hàng DH1002 của tôi giờ tới đâu rồi?"*
 
 ### 🤖 Chatbot Baseline (Mốc 2):
 
-* **Phản hồi**: *"Xin lỗi, tôi không thể kiểm tra thông tin đơn hàng từ hệ thống. Bạn vui lòng cung cấp mã đơn hàng chi tiết hơn hoặc liên hệ trực tiếp với bộ phận chăm sóc khách hàng của chúng tôi để được hỗ trợ nhé!"*
+* **Phản hồi**: *"Rất tiếc, tôi không thể tra cứu trạng thái đơn hàng cụ thể mà không có quyền truy cập vào hệ thống thực tế. Tuy nhiên, bạn có thể kiểm tra trạng thái đơn hàng DH1002 bằng cách đăng nhập vào tài khoản của mình trên trang web của chúng tôi hoặc liên hệ trực tiếp với bộ phận chăm sóc khách hàng để được hỗ trợ."*
 * **Nhận xét**: Chatbot thừa nhận không thể truy cập hệ thống thực tế. Nó an toàn nhưng không giải quyết được vấn đề tra cứu của người dùng.
