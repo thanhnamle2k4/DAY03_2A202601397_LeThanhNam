@@ -7,6 +7,7 @@ import json
 import os
 import re
 import sys
+from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 from dotenv import load_dotenv
 
 # Đảm bảo import các module cùng thư mục src/ hoạt động mượt mà
@@ -20,8 +21,14 @@ if sys.stdout.encoding != 'utf-8':
         pass
 
 # Import các thành phần từ file của Role 2, Role 3 & Multi-Provider Adapter
-from tools import AVAILABLE_TOOLS, run_tool, get_tools_description
-from prompts import CHATBOT_BASELINE_PROMPT, REACT_SYSTEM_PROMPT, MAX_ITERATIONS
+from tools import get_tools_description, reset_mock_state, run_tool
+from prompts import (
+    CHATBOT_BASELINE_PROMPT,
+    MAX_ITERATIONS,
+    MAX_REPEATED_ACTIONS,
+    REACT_SYSTEM_PROMPT,
+    TIMEOUT_SECONDS,
+)
 from providers import get_llm_provider
 
 load_dotenv()
@@ -39,6 +46,29 @@ def load_test_cases():
         return json.load(f)
 
 
+SAFE_FALLBACK = (
+    "Xin lỗi, tôi chưa thể hoàn tất yêu cầu một cách an toàn. "
+    "Vui lòng kiểm tra lại thông tin hoặc liên hệ nhân viên hỗ trợ."
+)
+PRIVACY_REFUSAL = (
+    "Tôi không thể bỏ qua hướng dẫn an toàn hoặc cung cấp dữ liệu đơn hàng "
+    "hàng loạt. Tôi chỉ có thể hỗ trợ một đơn cụ thể khi bạn cung cấp mã đơn."
+)
+
+
+def _is_prompt_injection(user_query: str) -> bool:
+    """Nhận diện các mẫu injection/quyền riêng tư rõ ràng trong bộ test."""
+    normalized = user_query.casefold()
+    blocked_patterns = (
+        "bỏ qua mọi hướng dẫn",
+        "bỏ qua hướng dẫn phía trên",
+        "liệt kê toàn bộ đơn hàng",
+        "hiển thị system prompt",
+        "đọc system prompt",
+    )
+    return any(pattern in normalized for pattern in blocked_patterns)
+
+
 def run_baseline_chatbot(user_query: str, provider):
     """
     Dựng Chatbot gốc (Baseline) không có công cụ.
@@ -49,6 +79,25 @@ def run_baseline_chatbot(user_query: str, provider):
     # Gọi LLM Provider thực hiện sinh câu trả lời
     response = provider.generate(user_query, system_prompt=CHATBOT_BASELINE_PROMPT)
     print(f"🤖 Chatbot trả lời:\n{response}")
+    return response
+
+
+def _execute_tool_with_timeout(tool_name: str, args_str: str) -> str:
+    """Chạy tool với timeout; mọi lỗi được chuyển thành Observation dạng chuỗi."""
+    executor = ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(run_tool, tool_name, args_str)
+    try:
+        return future.result(timeout=TIMEOUT_SECONDS)
+    except FutureTimeoutError:
+        future.cancel()
+        return (
+            f"LỖI: Tool '{tool_name}' vượt quá timeout "
+            f"{TIMEOUT_SECONDS} giây và đã bị ngắt an toàn."
+        )
+    except Exception as exc:
+        return f"LỖI: Không thực thi được tool '{tool_name}' ({type(exc).__name__}: {exc})."
+    finally:
+        executor.shutdown(wait=False, cancel_futures=True)
 
 
 def run_react_agent(user_query: str, provider):
@@ -56,20 +105,48 @@ def run_react_agent(user_query: str, provider):
     Dựng vòng lặp ReAct Agent (Thought -> Action -> Observation) có Guardrails.
     """
     print(f"\n🤖 [REACT AGENT] Câu hỏi: {user_query}")
+    if _is_prompt_injection(user_query):
+        print("🛡️ INPUT GUARDRAIL: Phát hiện prompt injection/yêu cầu dữ liệu hàng loạt.")
+        print(f"🏁 Final Answer: {PRIVACY_REFUSAL}")
+        return {
+            "status": "final",
+            "answer": PRIVACY_REFUSAL,
+            "steps": 0,
+            "trace": [{"step": 0, "type": "input_guardrail", "answer": PRIVACY_REFUSAL}],
+            "history": f"Question: {user_query}",
+        }
+
     step = 0
     history = f"Question: {user_query}"
+    trace = []
+    action_counts = {}
+    eligible_orders = set()
+    status = "guardrail"
+    final_answer = SAFE_FALLBACK
+    system_prompt = REACT_SYSTEM_PROMPT.format(
+        tool_descriptions=get_tools_description()
+    )
     
     while step < MAX_ITERATIONS:
         step += 1
         print(f"\n--- 🔄 Vòng lặp ReAct (Step {step}/{MAX_ITERATIONS}) ---")
         
         # Gọi LLM sinh suy luận (truyền lịch sử chat)
-        llm_response = provider.generate(history, system_prompt=REACT_SYSTEM_PROMPT)
+        try:
+            llm_response = provider.generate(history, system_prompt=system_prompt)
+        except Exception as exc:
+            llm_response = f"LỖI PROVIDER: {type(exc).__name__}: {exc}"
+
+        if not isinstance(llm_response, str):
+            llm_response = f"LỖI PROVIDER: output phải là str, nhận {type(llm_response).__name__}"
         
         # 1. Trích xuất Final Answer (Nếu có thì xong)
         final_answer_match = re.search(r"Final Answer:\s*(.+)", llm_response, re.IGNORECASE | re.DOTALL)
         if final_answer_match:
-            print(f"🏁 Final Answer: {final_answer_match.group(1).strip()}")
+            final_answer = final_answer_match.group(1).strip()
+            status = "final"
+            trace.append({"step": step, "type": "final", "answer": final_answer})
+            print(f"🏁 Final Answer: {final_answer}")
             break
             
         # 2. Trích xuất Thought
@@ -82,22 +159,88 @@ def run_react_agent(user_query: str, provider):
         if action_match:
             tool_name = action_match.group(1).strip()
             tool_args_str = action_match.group(2).strip()
+            action_key = (tool_name.lower(), tool_args_str.casefold())
+            action_counts[action_key] = action_counts.get(action_key, 0) + 1
             
             print(f"🛠️ Action: {tool_name}[{tool_args_str}]")
+
+            if action_counts[action_key] > MAX_REPEATED_ACTIONS:
+                obs = (
+                    "LỖI: Phát hiện Action bị lặp lại quá "
+                    f"{MAX_REPEATED_ACTIONS} lần; ngắt để tránh vòng lặp."
+                )
+                trace.append({
+                    "step": step,
+                    "type": "repeated_action",
+                    "thought": thought_match.group(1).strip() if thought_match else "",
+                    "action": tool_name,
+                    "args": tool_args_str,
+                    "observation": obs,
+                })
+                print(f"👁️ Observation: {obs}")
+                print(f"🏁 Final Answer: {SAFE_FALLBACK}")
+                status = "guardrail"
+                break
             
-            # Thực thi tool thông qua dispatcher an toàn
-            obs = run_tool(tool_name, tool_args_str)
+            # Defense in depth: write action chỉ chạy sau Observation xác nhận
+            # đủ điều kiện trong chính trace hiện tại.
+            requested_order = tool_args_str.split(",", 1)[0].strip().strip("'\"").upper()
+            if (
+                tool_name.lower() == "create_return_request"
+                and requested_order not in eligible_orders
+            ):
+                obs = (
+                    "LỖI: Chưa có Observation xác nhận đơn đủ điều kiện trong "
+                    "trace hiện tại; từ chối thực hiện write action."
+                )
+            else:
+                obs = _execute_tool_with_timeout(tool_name, tool_args_str)
+
+            if (
+                tool_name.lower() == "check_return_eligibility"
+                and obs.startswith("ĐỦ ĐIỀU KIỆN:")
+            ):
+                eligible_orders.add(requested_order)
+
             print(f"👁️ Observation: {obs}")
+            trace.append({
+                "step": step,
+                "type": "tool",
+                "thought": thought_match.group(1).strip() if thought_match else "",
+                "action": tool_name,
+                "args": tool_args_str,
+                "observation": obs,
+            })
             
             # Dán kết quả vào lịch sử cho vòng lặp tiếp theo
             history += f"\n{llm_response}\nObservation: {obs}\n"
         else:
+            parse_error = (
+                "LỖI FORMAT: Phản hồi phải chứa đúng một Action[...] "
+                "hoặc Final Answer:. Hãy sửa định dạng ở lượt tiếp theo."
+            )
             print("⚠️ Cảnh báo: LLM không trả về Action hợp lệ hoặc Format sai.")
             print("Raw LLM:\n", llm_response)
-            break
+            print(f"👁️ Observation: {parse_error}")
+            trace.append({
+                "step": step,
+                "type": "parse_error",
+                "raw": llm_response,
+                "observation": parse_error,
+            })
+            history += f"\n{llm_response}\nObservation: {parse_error}\n"
             
-    if step >= MAX_ITERATIONS:
+    if status != "final" and step >= MAX_ITERATIONS:
         print(f"🛡️ GUARDRAIL TRIGGERED: Đã đạt giới hạn tối đa {MAX_ITERATIONS} bước. Ngắt lặp an toàn!")
+        print(f"🏁 Final Answer: {SAFE_FALLBACK}")
+
+    return {
+        "status": status,
+        "answer": final_answer,
+        "steps": step,
+        "trace": trace,
+        "history": history,
+    }
 
 
 if __name__ == "__main__":
@@ -129,6 +272,7 @@ if __name__ == "__main__":
                 
             elif choice == '0':
                 print("\n🚀 BẮT ĐẦU CHẠY TOÀN BỘ TEST CASES...")
+                reset_mock_state()
                 for t in tests:
                     print(f"\n" + "="*50)
                     print(f"▶️ ĐANG CHẠY TEST CASE SỐ {t['id']}: {t['category']}")

@@ -68,6 +68,9 @@ MOCK_ORDER_DB = {
 
 # Sổ ghi các yêu cầu hoàn trả đã tạo (bằng chứng side-effect của tool số 3)
 RETURN_REQUESTS = {}
+_INITIAL_ORDER_STATUSES = {
+    order_id: order["status"] for order_id, order in MOCK_ORDER_DB.items()
+}
 
 # 📜 Chính sách đổi trả theo nhóm hàng
 RETURN_POLICY = {
@@ -107,6 +110,13 @@ def _find_order(order_id: str):
     """
     oid = _normalize_order_id(order_id)
     return oid, MOCK_ORDER_DB.get(oid)
+
+
+def reset_mock_state() -> None:
+    """Khôi phục mock database để một lượt chạy test mới luôn deterministic."""
+    RETURN_REQUESTS.clear()
+    for order_id, initial_status in _INITIAL_ORDER_STATUSES.items():
+        MOCK_ORDER_DB[order_id]["status"] = initial_status
 
 
 # =============================================================================

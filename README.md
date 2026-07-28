@@ -27,7 +27,7 @@ Bài Lab giúp bạn hiểu rõ sự tiến hóa qua 4 cấp độ của hệ th
 ├── 📄 requirements.txt          <-- 📦 Thư viện cần cài đặt
 │
 ├── 📁 config/                   <-- 🛠️ CẤU HÌNH & DỮ LIỆU
-│   └── 📄 test_cases.json       <-- 🟢 [Role 1] Bộ đề 5 Test Cases thử thách AI
+│   └── 📄 test_cases.json       <-- 🟢 [Role 1] Bộ đề 11 Test Cases thử thách AI
 │
 ├── 📁 src/                      <-- 💻 MÃ NGUỒN PYTHON (BOILERPLATE)
 │   ├── 📄 tools.py              <-- 🛠️ [Role 2] Khai báo các công cụ (Tools)
@@ -38,7 +38,9 @@ Bài Lab giúp bạn hiểu rõ sự tiến hóa qua 4 cấp độ của hệ th
     ├── 📄 CODELAB.md            <-- 🎓 [LMS Format] Hướng dẫn thực hành từng bước Codelab
     ├── 📄 PHAN_CONG_CONG_VIEC.md <-- 📋 [BẮT ĐẦU TẠI ĐÂY] Sổ tay thực hành & Checklist 5 Roles
     ├── 📄 DANH_SACH_DE_TAI.md    <-- 💡 Danh sách 10 chủ đề gợi ý
-    └── 📄 trace_eval.md          <-- 📊 [Role 5] Báo cáo Log Trace & Đánh giá Agentic Fit
+    ├── 📄 trace_eval.md          <-- 📊 [Role 5] Trace, RCA & đánh giá Agentic Fit
+    ├── 📄 hybrid_flowchart.mermaid <-- 🔀 Luồng Chatbot / ReAct Agent
+    └── 📄 cross_audit.md         <-- ⚔️ Biên bản pre-audit & mẫu chấm chéo
 ```
 
 ---
@@ -71,3 +73,16 @@ timeline
 
 > 🚀 **BẮT ĐẦU LÀM BÀI**:
 > Vui lòng mở sổ tay thực hành 👉 **[PHAN_CONG_CONG_VIEC.md](file:///c:/Users/Admin/Documents/VinUni/LabCoachVin/LabKeyCoach/Day-3-Lab-Chatbot-vs-react-agent-E402/docs/PHAN_CONG_CONG_VIEC.md)** để xem phân vai và checklist công việc cụ thể cho từng thành viên!
+
+### Chạy và kiểm thử
+
+```powershell
+pip install -r requirements.txt
+$env:PYTHONIOENCODING="utf-8"
+python src/tools.py
+python -m unittest discover -s tests -v
+python src/app.py
+```
+
+Mặc định có thể dùng `LLM_PROVIDER=mock` để kiểm tra offline. Khi demo hội thoại
+thực tế, cấu hình provider và API key trong `.env` (file này đã được `.gitignore`).

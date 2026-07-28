@@ -1,23 +1,33 @@
-graph TD
-    %% Định nghĩa các class màu sắc cho sinh động
-    classDef userReq fill:#f9d0c4,stroke:#333,stroke-width:2px;
-    classDef router fill:#ffe599,stroke:#333,stroke-width:2px;
-    classDef chatbot fill:#9fc5e8,stroke:#333,stroke-width:2px;
-    classDef react fill:#b6d7a8,stroke:#333,stroke-width:2px;
-    classDef tool fill:#f4cccc,stroke:#333,stroke-width:2px;
+flowchart TD
+    U[Người dùng gửi câu hỏi] --> R{Cần dữ liệu nội bộ<br/>hoặc hành động thật?}
 
-    User[👤 Khách hàng đặt câu hỏi]:::userReq --> Router{LLM Phân loại: <br/>Bản chất câu hỏi là gì?}:::router
-    
-    %% --- NHÁNH CHATBOT BASELINE ---
-    Router -->|Câu hỏi chung / Chính sách đổi trả chung| Chatbot(🤖 Chatbot Baseline Path):::chatbot
-    Chatbot --> CB_Process[Đọc kiến thức tĩnh từ System Prompt]:::chatbot
-    CB_Process --> CB_Answer[Trả lời ngay lập tức <br/> Nhanh & Rẻ]:::chatbot
+    R -->|Không| C[Chatbot Baseline]
+    C --> C1[1 LLM call<br/>0 tool calls]
+    C1 --> CA[Trả lời kiến thức/tư vấn chung]
 
-    %% --- NHÁNH REACT AGENT ---
-    Router -->|Cần tra cứu mã đơn / Yêu cầu hoàn tiền| Agent(🧠 ReAct Agent Path):::react
-    Agent --> Thought[🧠 Thought: Suy luận xem cần công cụ nào]:::react
-    Thought --> Action[🛠️ Action: Gọi Công cụ <br/> get_order_status / create_return_request]:::tool
-    Action --> Observation[👁️ Observation: Nhận kết quả từ Database]:::tool
-    Observation --> Eval{Đã đủ thông tin <br/> để kết luận chưa?}:::router
-    Eval -->|Chưa đủ| Thought
-    Eval -->|Đã đủ thông tin| Final[🏁 Final Answer: Tổng hợp kết quả báo cho khách]:::react
+    R -->|Có| S{Đủ tham số bắt buộc?}
+    S -->|Không| ASK[Hỏi lại mã đơn hoặc lý do]
+    S -->|Có| A[ReAct Agent V2]
+
+    A --> T[Thought]
+    T --> X[Action: gọi đúng 1 tool]
+    X --> O[Application chèn Observation thật]
+    O --> E{Kết quả thế nào?}
+
+    E -->|Đủ bằng chứng| F[Final Answer có căn cứ]
+    E -->|Cần bước tiếp| T
+    E -->|Lỗi có thể sửa| REC[Append lỗi vào history]
+    REC --> T
+    E -->|Từ chối/chính sách| REF[Giải thích và từ chối lịch sự]
+
+    T --> G{Guardrail}
+    G -->|Sai format| REC
+    G -->|Lặp Action hoặc quá MAX_ITERATIONS| SF[Safe Fallback]
+    G -->|Prompt injection / yêu cầu dữ liệu hàng loạt| PRIV[Từ chối, không gọi tool]
+
+    classDef chatbot fill:#9fc5e8,stroke:#333,stroke-width:1px
+    classDef agent fill:#b6d7a8,stroke:#333,stroke-width:1px
+    classDef guard fill:#f4cccc,stroke:#333,stroke-width:1px
+    class C,C1,CA chatbot
+    class A,T,X,O,E,F,REC,REF agent
+    class G,SF,PRIV guard
