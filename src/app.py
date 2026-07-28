@@ -56,33 +56,43 @@ def run_react_agent(user_query: str, provider):
     """
     print(f"\n🤖 [REACT AGENT] Câu hỏi: {user_query}")
     step = 0
+    history = f"Question: {user_query}"
     
     while step < MAX_ITERATIONS:
         step += 1
         print(f"\n--- 🔄 Vòng lặp ReAct (Step {step}/{MAX_ITERATIONS}) ---")
         
-        if step == 1:
-            print("🧠 Thought: Cần tra cứu thông tin chi tiết đơn hàng ORD123.")
-            print("🛠️ Action: get_order_info['ORD123']")
+        # Gọi LLM sinh suy luận (truyền lịch sử chat)
+        llm_response = provider.generate(history, system_prompt=REACT_SYSTEM_PROMPT)
+        
+        # 1. Trích xuất Final Answer (Nếu có thì xong)
+        final_answer_match = re.search(r"Final Answer:\s*(.+)", llm_response, re.IGNORECASE | re.DOTALL)
+        if final_answer_match:
+            print(f"🏁 Final Answer: {final_answer_match.group(1).strip()}")
+            break
             
-            # Thực thi tool
-            obs = get_order_info("ORD123")
+        # 2. Trích xuất Thought
+        thought_match = re.search(r"Thought:\s*(.+)", llm_response, re.IGNORECASE)
+        if thought_match:
+            print(f"🧠 Thought: {thought_match.group(1).strip()}")
+            
+        # 3. Trích xuất Action
+        action_match = re.search(r"Action:\s*([a-zA-Z0-9_]+)\[(.*?)\]", llm_response, re.IGNORECASE)
+        if action_match:
+            tool_name = action_match.group(1).strip()
+            tool_args_str = action_match.group(2).strip()
+            
+            print(f"🛠️ Action: {tool_name}[{tool_args_str}]")
+            
+            # Thực thi tool thông qua dispatcher an toàn
+            obs = run_tool(tool_name, tool_args_str)
             print(f"👁️ Observation: {obs}")
             
-        elif step == 2:
-            print("🧠 Thought: Đơn hàng đã giao, kiểm tra điều kiện đổi trả.")
-            print("🛠️ Action: check_return_eligibility['ORD123']")
-            
-            obs = check_return_eligibility("ORD123")
-            print(f"👁️ Observation: {obs}")
-
-        elif step == 3:
-            print("🧠 Thought: Đơn hàng đủ điều kiện, tạo yêu cầu đổi trả.")
-            print("🛠️ Action: create_return_request['ORD123', 'Sản phẩm bị lỗi']")
-            
-            obs = create_return_request("ORD123", "Sản phẩm bị lỗi")
-            print(f"👁️ Observation: {obs}")
-            print("🏁 Final Answer: Yêu cầu đổi trả cho đơn hàng ORD123 đã được tạo thành công! Mã trả hàng: RET_ORD123_01.")
+            # Dán kết quả vào lịch sử cho vòng lặp tiếp theo
+            history += f"\n{llm_response}\nObservation: {obs}\n"
+        else:
+            print("⚠️ Cảnh báo: LLM không trả về Action hợp lệ hoặc Format sai.")
+            print("Raw LLM:\n", llm_response)
             break
             
     if step >= MAX_ITERATIONS:
@@ -103,7 +113,7 @@ if __name__ == "__main__":
     print(f"✅ Đã tải thành công {len(tests)} Test Cases từ config/test_cases.json\n")
     
     # Câu hỏi demo cho đề tài tra cứu đơn hàng & xử lý đổi trả
-    sample_query = "Kiểm tra thông tin đơn hàng ORD123 và tạo yêu cầu đổi trả do sản phẩm bị lỗi."
+    sample_query = "Kiểm tra thông tin đơn hàng DH1001 và tạo yêu cầu đổi trả do sản phẩm bị chật."
     
     print("--- DEMO 1: CHẠY TRÊN CHATBOT BASELINE ---")
     run_baseline_chatbot(sample_query, provider)
