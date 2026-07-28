@@ -1,0 +1,23 @@
+graph TD
+    %% Định nghĩa các class màu sắc cho sinh động
+    classDef userReq fill:#f9d0c4,stroke:#333,stroke-width:2px;
+    classDef router fill:#ffe599,stroke:#333,stroke-width:2px;
+    classDef chatbot fill:#9fc5e8,stroke:#333,stroke-width:2px;
+    classDef react fill:#b6d7a8,stroke:#333,stroke-width:2px;
+    classDef tool fill:#f4cccc,stroke:#333,stroke-width:2px;
+
+    User[👤 Khách hàng đặt câu hỏi]:::userReq --> Router{LLM Phân loại: <br/>Bản chất câu hỏi là gì?}:::router
+    
+    %% --- NHÁNH CHATBOT BASELINE ---
+    Router -->|Câu hỏi chung / Chính sách đổi trả chung| Chatbot(🤖 Chatbot Baseline Path):::chatbot
+    Chatbot --> CB_Process[Đọc kiến thức tĩnh từ System Prompt]:::chatbot
+    CB_Process --> CB_Answer[Trả lời ngay lập tức <br/> Nhanh & Rẻ]:::chatbot
+
+    %% --- NHÁNH REACT AGENT ---
+    Router -->|Cần tra cứu mã đơn / Yêu cầu hoàn tiền| Agent(🧠 ReAct Agent Path):::react
+    Agent --> Thought[🧠 Thought: Suy luận xem cần công cụ nào]:::react
+    Thought --> Action[🛠️ Action: Gọi Công cụ <br/> get_order_status / create_return_request]:::tool
+    Action --> Observation[👁️ Observation: Nhận kết quả từ Database]:::tool
+    Observation --> Eval{Đã đủ thông tin <br/> để kết luận chưa?}:::router
+    Eval -->|Chưa đủ| Thought
+    Eval -->|Đã đủ thông tin| Final[🏁 Final Answer: Tổng hợp kết quả báo cho khách]:::react
