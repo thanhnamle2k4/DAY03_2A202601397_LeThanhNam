@@ -8,7 +8,7 @@
 
 | Tiêu chí                       |  Điểm (1-5)  | Lý do đánh giá                                                                                                                                               |
 | :------------------------------- | :-------------: | :--------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 🧠**Multi-step Reasoning** |     `4/5`     | Nhận yêu cầu -> Hỏi mã đơn -> Tra cứu đơn hàng -> Kiểm tra điều kiện đổi trả(thời gian, tình trạng) -> Hướng xử lý                      |
+| 🧠**Multi-step Reasoning** |     `5/5`     | Nhận yêu cầu -> Hỏi mã đơn -> Tra cứu đơn hàng -> Kiểm tra điều kiện đổi trả(thời gian, tình trạng đơn hàng) -> Hướng xử lý          |
 | 🛠️**Tool Interaction**   |     `5/5`     | Cần dùng công cụ dể tra cứu tình trạng  đơn hàng thực tế để thực hiện hoàn tiền/hủy đơn                                                   |
 | 🔀**Dynamic Decision**     |     `5/5`     | Nếu đơn hàng chưa giao -> Hủy đơn. Nếu đã giao nhưng quá thời gian 7 ngày -> Từ chối đổi trả. Nếu đủ điều kiện -> Chấp nhận xử lí. |
 | ⏳**Long Horizon**         |     `4/5`     | Quy trình gồm nhiều lượt hỏi đáp để hỏi thông tin tình trạng đơn hàng trước khi đưa ra quyết định cuối cùng                           |
