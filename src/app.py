@@ -112,11 +112,60 @@ if __name__ == "__main__":
     tests = load_test_cases()
     print(f"✅ Đã tải thành công {len(tests)} Test Cases từ config/test_cases.json\n")
     
-    # Câu hỏi demo cho đề tài tra cứu đơn hàng & xử lý đổi trả
-    sample_query = "Kiểm tra thông tin đơn hàng DH1001 và tạo yêu cầu đổi trả do sản phẩm bị chật."
-    
-    print("--- DEMO 1: CHẠY TRÊN CHATBOT BASELINE ---")
-    run_baseline_chatbot(sample_query, provider)
-    
-    print("\n--- DEMO 2: CHẠY TRÊN REACT AGENT ---")
-    run_react_agent(sample_query, provider)
+    while True:
+        print("\n" + "="*60)
+        print(" 🎯 DANH SÁCH BỘ TEST (CHỌN ĐỂ CHẠY)")
+        print("="*60)
+        for t in tests:
+            print(f"[{t['id']}] {t['category']}")
+            print(f"    👉 {t['question']}")
+        print("[99] Chạy TẤT CẢ các test cases")
+        print("[0] Thoát chương trình")
+        
+        try:
+            choice = int(input("\nNhập ID câu hỏi muốn test (0 để thoát, 99 để chạy hết): "))
+            if choice == 0:
+                print("👋 Tạm biệt!")
+                break
+                
+            if choice == 99:
+                print("\n🚀 BẮT ĐẦU CHẠY TOÀN BỘ TEST CASES...")
+                for t in tests:
+                    print(f"\n" + "="*50)
+                    print(f"▶️ ĐANG CHẠY TEST CASE SỐ {t['id']}: {t['category']}")
+                    print(f"="*50)
+                    
+                    print("\n--- DEMO 1: CHẠY TRÊN CHATBOT BASELINE ---")
+                    run_baseline_chatbot(t["question"], provider)
+                    
+                    print("\n--- DEMO 2: CHẠY TRÊN REACT AGENT ---")
+                    run_react_agent(t["question"], provider)
+                    
+                input("\n[Đã chạy xong tất cả. Nhấn Enter để quay lại menu chính...]")
+                continue
+                
+            selected_test = next((t for t in tests if t["id"] == choice), None)
+            if not selected_test:
+                print("❌ ID không hợp lệ, vui lòng chọn lại.")
+                continue
+                
+            sample_query = selected_test["question"]
+            
+            print(f"\n" + "-"*50)
+            print(f"▶️ BẠN ĐANG CHẠY TEST CASE SỐ {choice}: {selected_test['category']}")
+            print(f"-"*50)
+            
+            print("\n--- DEMO 1: CHẠY TRÊN CHATBOT BASELINE ---")
+            run_baseline_chatbot(sample_query, provider)
+            
+            print("\n--- DEMO 2: CHẠY TRÊN REACT AGENT ---")
+            run_react_agent(sample_query, provider)
+            
+            input("\n[Nhấn Enter để quay lại menu chính...]")
+            
+        except ValueError:
+            print("❌ Vui lòng nhập một số.")
+        except KeyboardInterrupt:
+            print("\n👋 Tạm biệt!")
+            break
+
