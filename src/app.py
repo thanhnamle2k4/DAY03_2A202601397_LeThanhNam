@@ -111,25 +111,23 @@ if __name__ == "__main__":
     print(f"🔌 LLM Provider đang hoạt động: {provider.__class__.__name__} (Model: {model_name})")
     
     tests = load_test_cases()
-    print(f"✅ Đã tải thành công {len(tests)} Test Cases từ config/test_cases.json\n")
     
     while True:
-        print("\n" + "="*60)
-        print(" 🎯 DANH SÁCH BỘ TEST (CHỌN ĐỂ CHẠY)")
-        print("="*60)
-        for t in tests:
-            print(f"[{t['id']}] {t['category']}")
-            print(f"    👉 {t['question']}")
-        print("[99] Chạy TẤT CẢ các test cases")
-        print("[0] Thoát chương trình")
+        print("\n" + "="*50)
+        print(" 🎯 MENU CHÍNH")
+        print("="*50)
+        print("[0] Chạy tự động toàn bộ 11 Test Cases")
+        print("[1] Chế độ Chat trực tiếp (Tự nhập câu hỏi)")
+        print("[2] Thoát chương trình")
         
         try:
-            choice = int(input("\nNhập ID câu hỏi muốn test (0 để thoát, 99 để chạy hết): "))
-            if choice == 0:
+            choice = input("\n👉 Lựa chọn của bạn (0-2): ").strip()
+            
+            if choice == '2':
                 print("👋 Tạm biệt!")
                 break
                 
-            if choice == 99:
+            elif choice == '0':
                 print("\n🚀 BẮT ĐẦU CHẠY TOÀN BỘ TEST CASES...")
                 for t in tests:
                     print(f"\n" + "="*50)
@@ -143,29 +141,29 @@ if __name__ == "__main__":
                     run_react_agent(t["question"], provider)
                     
                 input("\n[Đã chạy xong tất cả. Nhấn Enter để quay lại menu chính...]")
-                continue
                 
-            selected_test = next((t for t in tests if t["id"] == choice), None)
-            if not selected_test:
-                print("❌ ID không hợp lệ, vui lòng chọn lại.")
-                continue
+            elif choice == '1':
+                print("\n" + "="*50)
+                print("💬 CHẾ ĐỘ CHAT TRỰC TIẾP (LIVE CHAT)")
+                print("Gõ 'exit' hoặc 'quit' để thoát về Menu chính.")
+                print("="*50 + "\n")
                 
-            sample_query = selected_test["question"]
-            
-            print(f"\n" + "-"*50)
-            print(f"▶️ BẠN ĐANG CHẠY TEST CASE SỐ {choice}: {selected_test['category']}")
-            print(f"-"*50)
-            
-            print("\n--- DEMO 1: CHẠY TRÊN CHATBOT BASELINE ---")
-            run_baseline_chatbot(sample_query, provider)
-            
-            print("\n--- DEMO 2: CHẠY TRÊN REACT AGENT ---")
-            run_react_agent(sample_query, provider)
-            
-            input("\n[Nhấn Enter để quay lại menu chính...]")
-            
-        except ValueError:
-            print("❌ Vui lòng nhập một số.")
+                while True:
+                    user_query = input("🧑 Bạn: ")
+                    
+                    if user_query.strip().lower() in ['exit', 'quit']:
+                        print("🔙 Quay lại Menu chính...")
+                        break
+                        
+                    if not user_query.strip():
+                        continue
+                    
+                    print("\n--- 🤖 REACT AGENT XỬ LÝ ---")
+                    run_react_agent(user_query, provider)
+                    print("\n" + "-"*50)
+            else:
+                print("❌ Lựa chọn không hợp lệ. Vui lòng nhập 0, 1 hoặc 2.")
+                
         except KeyboardInterrupt:
             print("\n👋 Tạm biệt!")
             break
