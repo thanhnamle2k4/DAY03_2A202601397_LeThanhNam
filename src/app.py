@@ -19,7 +19,7 @@ if sys.stdout.encoding != 'utf-8':
         pass
 
 # Import các thành phần từ file của Role 2, Role 3 & Multi-Provider Adapter
-from tools import AVAILABLE_TOOLS, get_weather, search_flights
+from tools import AVAILABLE_TOOLS, get_order_info, check_return_eligibility, create_return_request
 from prompts import CHATBOT_BASELINE_PROMPT, REACT_SYSTEM_PROMPT, MAX_ITERATIONS
 from providers import get_llm_provider
 
@@ -62,16 +62,27 @@ def run_react_agent(user_query: str, provider):
         print(f"\n--- 🔄 Vòng lặp ReAct (Step {step}/{MAX_ITERATIONS}) ---")
         
         if step == 1:
-            print("🧠 Thought: Câu hỏi này cần tra cứu thời tiết thời gian thực.")
-            print("🛠️ Action: get_weather['Hà Nội']")
+            print("🧠 Thought: Cần tra cứu thông tin chi tiết đơn hàng ORD123.")
+            print("🛠️ Action: get_order_info['ORD123']")
             
             # Thực thi tool
-            obs = get_weather("Hà Nội")
+            obs = get_order_info("ORD123")
             print(f"👁️ Observation: {obs}")
             
         elif step == 2:
-            print("🧠 Thought: Tôi đã có thông tin thời tiết Hà Nội, giờ tôi có thể tư vấn trang phục.")
-            print("🏁 Final Answer: Thời tiết Hà Nội hôm nay 28°C, nắng nhẹ. Bạn nên mặc áo phông thoáng mát!")
+            print("🧠 Thought: Đơn hàng đã giao, kiểm tra điều kiện đổi trả.")
+            print("🛠️ Action: check_return_eligibility['ORD123']")
+            
+            obs = check_return_eligibility("ORD123")
+            print(f"👁️ Observation: {obs}")
+
+        elif step == 3:
+            print("🧠 Thought: Đơn hàng đủ điều kiện, tạo yêu cầu đổi trả.")
+            print("🛠️ Action: create_return_request['ORD123', 'Sản phẩm bị lỗi']")
+            
+            obs = create_return_request("ORD123", "Sản phẩm bị lỗi")
+            print(f"👁️ Observation: {obs}")
+            print("🏁 Final Answer: Yêu cầu đổi trả cho đơn hàng ORD123 đã được tạo thành công! Mã trả hàng: RET_ORD123_01.")
             break
             
     if step >= MAX_ITERATIONS:
@@ -91,8 +102,8 @@ if __name__ == "__main__":
     tests = load_test_cases()
     print(f"✅ Đã tải thành công {len(tests)} Test Cases từ config/test_cases.json\n")
     
-    # Chạy thử câu test số 3
-    sample_query = tests[2]["question"]
+    # Câu hỏi demo cho đề tài tra cứu đơn hàng & xử lý đổi trả
+    sample_query = "Kiểm tra thông tin đơn hàng ORD123 và tạo yêu cầu đổi trả do sản phẩm bị lỗi."
     
     print("--- DEMO 1: CHẠY TRÊN CHATBOT BASELINE ---")
     run_baseline_chatbot(sample_query, provider)
